@@ -10,7 +10,7 @@ This project is a Python service that periodically polls the Aviationstack Fligh
 4. A small, modular design that is easy to configure and extend.
 ```
 ## High‑Level Architecture
-<img width="1248" height="832" alt="image" src="https://github.com/user-attachments/assets/3c48ffa9-224a-4fdb-9d13-4c3719a7067d" />
+<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/0e359128-63ba-4cd6-982a-c1d4cb59c00e" />
 
 ```bash
 The Python Flight Poller runs on a schedule and calls Aviationstack’s /v1/flights endpoint with configurable filters (dep_iata, arr_iata, flight_status, limit).​
