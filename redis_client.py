@@ -1,3 +1,5 @@
+# redis_client.py
+
 import redis
 from typing import Optional
 
@@ -12,11 +14,16 @@ class RedisClient:
         )
 
     def get_value(self, key: str) -> Optional[str]:
+        """Return value for key or None if not present."""
         return self._client.get(key)
 
     def set_value(self, key: str, value: str) -> None:
+        """Create or overwrite a key with the given string value."""
         self._client.set(key, value)
 
     def update_value(self, key: str, value: str) -> None:
-        # For simple string values, update is just overwrite.
+        """
+        Update an existing key.
+        For string values, this is effectively the same as set.
+        """
         self._client.set(key, value)

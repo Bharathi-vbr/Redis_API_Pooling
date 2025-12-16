@@ -1,3 +1,5 @@
+# main.py
+
 import json
 import time
 import logging
@@ -7,9 +9,12 @@ from config import (
     REDIS_PORT,
     REDIS_DB,
     API_BASE_URL,
-    TODO_ID,
+    AVIATIONSTACK_ACCESS_KEY,
+    DEP_IATA,
+    ARR_IATA,
+    FLIGHT_STATUS,
     POLL_INTERVAL_SECONDS,
-    REDIS_TODO_KEY_TEMPLATE,
+    REDIS_FLIGHT_KEY_TEMPLATE,
 )
 from redis_client import RedisClient
 from api_client import ApiClient
@@ -21,30 +26,54 @@ logging.basicConfig(
 )
 
 
-def build_todo_key(todo_id: int) -> str:
-    return REDIS_TODO_KEY_TEMPLATE.format(id=todo_id)
+def build_flight_key(flight_iata: str) -> str:
+    """
+    Build a Redis key for a flight, e.g. flight:MU2557.
+    You can customize this to include airports if you want.
+    """
+    return REDIS_FLIGHT_KEY_TEMPLATE.format(flight_iata=flight_iata)
 
 
-def poll_and_cache_todo(redis_client: RedisClient, api_client: ApiClient, todo_id: int) -> None:
-    key = build_todo_key(todo_id)
-
+def poll_and_cache_flights(redis_client: RedisClient, api_client: ApiClient) -> None:
+    """
+    Poll Aviationstack for multiple flights and cache each one in Redis.
+    """
     try:
-        logging.info("Polling API for TODO id=%s", todo_id)
-        todo_data = api_client.fetch_todo(todo_id)
-        serialized = json.dumps(todo_data)
+        logging.info(
+            "Polling Aviationstack API for flights dep_iata=%s, arr_iata=%s, status=%s",
+            DEP_IATA,
+            ARR_IATA,
+            FLIGHT_STATUS,
+        )
 
-        existing = redis_client.get_value(key)
-        if existing is None:
-            logging.info("Key '%s' does not exist yet. Creating it.", key)
-            redis_client.set_value(key, serialized)
-        else:
-            logging.info("Key '%s' exists. Updating it.", key)
-            redis_client.update_value(key, serialized)
+        flights = api_client.fetch_flights()
 
-        logging.info("Key '%s' now holds: %s", key, serialized)
+        if not flights:
+            logging.warning(
+                "No flights returned for dep_iata=%s, arr_iata=%s, status=%s; nothing to cache.",
+                DEP_IATA,
+                ARR_IATA,
+                FLIGHT_STATUS,
+            )
+            return
+
+        for flight in flights:
+            flight_iata = flight["flight_iata"]
+            key = build_flight_key(flight_iata)
+            serialized = json.dumps(flight)
+
+            existing = redis_client.get_value(key)
+            if existing is None:
+                logging.info("Key '%s' does not exist yet. Creating it.", key)
+                redis_client.set_value(key, serialized)
+            else:
+                logging.info("Key '%s' exists. Updating it.", key)
+                redis_client.update_value(key, serialized)
+
+            logging.info("Key '%s' now holds: %s", key, serialized)
 
     except Exception as exc:
-        logging.error("Failed to poll API or update Redis for key '%s': %s", key, exc)
+        logging.error("Failed to poll Aviationstack or update Redis: %s", exc)
 
 
 def main() -> None:
@@ -53,11 +82,17 @@ def main() -> None:
         port=REDIS_PORT,
         db=REDIS_DB,
     )
-    api_client = ApiClient(API_BASE_URL)
+    api_client = ApiClient(API_BASE_URL, AVIATIONSTACK_ACCESS_KEY)
 
-    logging.info("Starting polling loop. Interval=%ss", POLL_INTERVAL_SECONDS)
+    logging.info(
+        "Starting multi-flight polling loop. Interval=%ss, dep_iata=%s, arr_iata=%s, status=%s",
+        POLL_INTERVAL_SECONDS,
+        DEP_IATA,
+        ARR_IATA,
+        FLIGHT_STATUS,
+    )
     while True:
-        poll_and_cache_todo(redis_client, api_client, TODO_ID)
+        poll_and_cache_flights(redis_client, api_client)
         time.sleep(POLL_INTERVAL_SECONDS)
 
 
